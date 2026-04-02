@@ -40,18 +40,30 @@ async function getWeather() {
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
     const res = await axios.get(url);
+
     const d = res.data;
 
     return {
       temp: d.main.temp,
       feels: d.main.feels_like,
       humidity: d.main.humidity,
+      temp_min: d.main.temp_min,
+      temp_max: d.main.temp_max,
+      pressure: d.main.pressure,
+
       weather: d.weather[0].description,
+
       wind: d.wind.speed,
+      clouds: d.clouds.all,
+      visibility: d.visibility,
+
+      sunrise: d.sys.sunrise,
+      sunset: d.sys.sunset,
+
       city: d.name,
     };
   } catch (err) {
-    console.log("Weather error:", err.message);
+    console.log("❌ WEATHER ERROR:", err.response?.data || err.message);
     return null;
   }
 }
@@ -61,34 +73,92 @@ async function formatWeatherBasic() {
   const w = await getWeather();
   if (!w) return "";
 
+  const sunrise = new Date(w.sunrise * 1000).toLocaleTimeString("vi-VN");
+  const sunset = new Date(w.sunset * 1000).toLocaleTimeString("vi-VN");
+
   return `
-🌤 *Thời tiết ${w.city}*
+${getWeatherEmoji(w.weather)} *Thời tiết ${w.city}*
 _${w.weather}_
-🌡 *${w.temp}°C* (cảm giác ${w.feels}°C) • 💧 ${w.humidity}%
+
+🌡 *${w.temp}°C* (cảm giác ${w.feels}°C)
+🔻 ${w.temp_min}°C • 🔺 ${w.temp_max}°C
+💧 ${w.humidity}% • 🌥 ${w.clouds}%
+
+🌬 ${w.wind} m/s • 👁 ${(w.visibility / 1000).toFixed(1)} km
+📈 ${w.pressure} hPa
+
+🌅 ${sunrise} • 🌇 ${sunset}
 ━━━━━━━━━━━━━━
 
 `;
 }
 
+async function getForecast() {
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/forecast?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
+    const res = await axios.get(url);
+
+    // lấy 3 mốc gần nhất (đỡ spam)
+    return res.data.list.slice(0, 3);
+  } catch (err) {
+    console.log("Forecast error:", err.message);
+    return [];
+  }
+}
+
 // ===== WEATHER DETAIL =====
 async function formatWeatherDetail() {
   const w = await getWeather();
+  const forecast = await getForecast();
+
   if (!w) return "❌ Không lấy được dữ liệu thời tiết";
 
-  return `
+  let msg = `
 🌍 *THỜI TIẾT CHI TIẾT*
 
 📍 *${w.city}*
 
-🌤 ${w.weather}
-🌡 Nhiệt độ: *${w.temp}°C*
-🤒 Cảm giác: ${w.feels}°C
-💧 Độ ẩm: ${w.humidity}%
-🌬 Gió: ${w.wind} m/s
+${getWeatherEmoji(w.weather)} ${w.weather}
+
+🌡 ${w.temp}°C (cảm giác ${w.feels}°C)
+🔻 ${w.temp_min}°C • 🔺 ${w.temp_max}°C
+💧 ${w.humidity}% • 🌥 ${w.clouds}%
+🌬 ${w.wind} m/s
+📈 ${w.pressure} hPa
 
 ━━━━━━━━━━━━━━
-⏰ _Realtime_
+📊 *Dự báo sắp tới*
 `;
+
+  forecast.forEach(f => {
+    const time = new Date(f.dt * 1000).toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    msg += `
+🕒 ${time}
+🌡 ${f.main.temp}°C
+💧 ${f.main.humidity}%
+_${f.weather[0].description}_
+`;
+  });
+
+  msg += `\n━━━━━━━━━━━━━━\n⏰ _Realtime_`;
+
+  return msg;
+}
+
+function getWeatherEmoji(desc) {
+  desc = desc.toLowerCase();
+
+  if (desc.includes("mưa")) return "🌧";
+  if (desc.includes("nắng") || desc.includes("clear")) return "☀️";
+  if (desc.includes("mây")) return "☁️";
+  if (desc.includes("giông")) return "⛈";
+  if (desc.includes("sương")) return "🌫";
+
+  return "🌤";
 }
 
 // ===== PARSE DATE =====
