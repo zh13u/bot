@@ -139,7 +139,7 @@ async function formatTasks(rows) {
   msg += `✅ Còn hạn: ${normal}\n`;
   msg += `❌ Hết hạn: ${expired}\n\n`;
 
-  msg += `👉 [Mở Google Sheet để tắt task](https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=710842622#gid=710842622)\n\n`;
+  msg += `👉 [Mở Google Sheet để tắt task đã hết hạn](https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=710842622#gid=710842622)\n\n`;
 
   msg += `━━━━━━━━━━━━━━\n\n`;
   msg += body;
