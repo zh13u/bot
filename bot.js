@@ -20,6 +20,7 @@ async function sendTelegram(chatId, text) {
   await axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
     chat_id: chatId,
     text: text,
+    parse_mode: "Markdown",
   });
 }
 
@@ -47,23 +48,31 @@ function formatDate(date) {
 
 // ===== FORMAT TASK =====
 function formatTasks(rows) {
-  let msg = "";
+  let now = new Date();
+
+  let todayHeader = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  let msg = `📅 *${todayHeader}*\n\n`;
 
   rows.forEach((r) => {
-    // ✅ xử lý checkbox
     if (!(r.Send === true || r.Send === "TRUE")) return;
 
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
     let status = (r.Status || "None").trim();
 
-    // ✅ FIX DATE
     let end = parseVNDate(r["End Time"]);
     let endStr = formatDate(end);
 
-    msg += `📌 ${title} | ${endStr}\n`;
-    msg += `📝 Content: ${content}\n`;
-    msg += `👾 Status: ${status}\n`;
+    // 🔥 FORMAT FINAL
+    msg += `*${title}* | _${endStr}_\n`;
+    msg += `📝 Content: _${content}_\n`;
+    msg += `👾 Status: _${status}_\n`;
     msg += `----------------------\n\n`;
   });
 
