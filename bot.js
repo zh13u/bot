@@ -11,6 +11,10 @@ const CHAT_ID = process.env.CHAT_ID;
 const SHEET_ID = process.env.SHEET_ID;
 const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
+// 👉 THÊM WEATHER
+const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
+const CITY = "Ho Chi Minh";
+
 // ===== MEMORY =====
 let isPausedToday = false;
 let pausedDate = "";
@@ -31,6 +35,62 @@ function getNowVN() {
   );
 }
 
+// ===== WEATHER =====
+async function getWeather() {
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
+    const res = await axios.get(url);
+    const d = res.data;
+
+    return {
+      temp: d.main.temp,
+      feels: d.main.feels_like,
+      humidity: d.main.humidity,
+      weather: d.weather[0].description,
+      wind: d.wind.speed,
+      city: d.name,
+    };
+  } catch (err) {
+    console.log("Weather error:", err.message);
+    return null;
+  }
+}
+
+// ===== FORMAT WEATHER BASIC =====
+async function formatWeatherBasic() {
+  const w = await getWeather();
+  if (!w) return "";
+
+  return `
+🌤 *Thời tiết ${w.city}*
+_${w.weather}_
+🌡 *${w.temp}°C* (cảm giác ${w.feels}°C) • 💧 ${w.humidity}%
+━━━━━━━━━━━━━━
+
+`;
+}
+
+// ===== WEATHER DETAIL =====
+async function formatWeatherDetail() {
+  const w = await getWeather();
+  if (!w) return "❌ Không lấy được dữ liệu thời tiết";
+
+  return `
+🌍 *THỜI TIẾT CHI TIẾT*
+
+📍 *${w.city}*
+
+🌤 ${w.weather}
+🌡 Nhiệt độ: *${w.temp}°C*
+🤒 Cảm giác: ${w.feels}°C
+💧 Độ ẩm: ${w.humidity}%
+🌬 Gió: ${w.wind} m/s
+
+━━━━━━━━━━━━━━
+⏰ _Realtime_
+`;
+}
+
 // ===== PARSE DATE =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
@@ -39,14 +99,7 @@ function parseVNDate(dateStr) {
   const [day, month, year] = datePart.split("/");
   let [hour, minute, second] = timePart.split(":");
 
-  return new Date(
-    year,
-    month - 1,
-    day,
-    parseInt(hour),
-    parseInt(minute),
-    parseInt(second)
-  );
+  return new Date(year, month - 1, day, hour, minute, second);
 }
 
 // ===== FORMAT DATE =====
@@ -109,7 +162,6 @@ async function formatTasks(rows) {
       statusLine = "Hết hạn";
       expired++;
 
-      // 🔥 CHỈ UPDATE KHI HẾT HẠN
       if (r.Status !== "Hết hạn") {
         r.Status = "Hết hạn";
         await r.save();
@@ -124,16 +176,22 @@ async function formatTasks(rows) {
       normal++;
     }
 
-    body += `📌 *${title}*\n`;
+    body += `*${title}*\n`;
     body += `⏰ _${endStr}_\n`;
-    body += `📝 ${content}\n`;
-    body += `👾 ${statusLine}\n`;
-    body += `⏳ ${getRemainingTime(diff)}\n`;
-    body += `${state}\n`;
+    body += `📝 _${content}_\n`;
+    body += `👾 _${statusLine}_\n`;
+    body += `⏳ _${getRemainingTime(diff)}_\n`;
+    body += `_${state}_\n`;
     body += `━━━━━━━━━━━━━━\n\n`;
   }
 
+  // 👉 THÊM WEATHER VÀO HEADER
+  const weather = await formatWeatherBasic();
+
   let msg = `📅 *${todayHeader}*\n\n`;
+
+  msg += weather; // 🔥 CHÈN WEATHER Ở ĐÂY
+
   msg += `📊 *Tổng: ${total}*\n`;
   msg += `🔥 Sắp hết: ${urgent}\n`;
   msg += `✅ Còn hạn: ${normal}\n`;
@@ -182,12 +240,19 @@ async function handleCommand(text, chatId) {
     return sendTelegram(chatId, "▶️ Đã bật lại thông báo");
   }
 
+  // 👉 THÊM COMMAND MỚI
+  if (text === "/weather_detail") {
+    const msg = await formatWeatherDetail();
+    return sendTelegram(chatId, msg);
+  }
+
   if (text === "/help") {
     return sendTelegram(chatId,
 `📌 COMMAND:
 /today
 /end_today
 /restart
+/weather_detail
 /help`);
   }
 
@@ -227,7 +292,7 @@ setInterval(async () => {
   } catch (e) {
     console.log(e);
   }
-}, 10 * 1000);
+}, 15 * 60 * 1000);
 
 // ===== HEALTH =====
 app.get("/", (req, res) => {
