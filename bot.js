@@ -26,12 +26,21 @@ async function sendTelegram(chatId, text) {
 
 // ===== FIX DATE PARSE (dd/MM/yyyy HH:mm:ss) =====
 function parseVNDate(dateStr) {
-  if (!dateStr) return new Date();
+  if (!dateStr) return null;
 
   const [datePart, timePart] = dateStr.split(" ");
+  if (!datePart || !timePart) return null;
+
   const [day, month, year] = datePart.split("/");
 
-  return new Date(`${year}-${month}-${day}T${timePart}`);
+  let [hour, minute, second] = timePart.split(":");
+
+  // ✅ FIX: thêm số 0 nếu thiếu
+  hour = hour.padStart(2, "0");
+  minute = minute.padStart(2, "0");
+  second = second.padStart(2, "0");
+
+  return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
 }
 
 // ===== FORMAT DATE HIỂN THỊ =====
@@ -62,21 +71,25 @@ function formatTasks(rows) {
   rows.forEach((r) => {
     if (!(r.Send === true || r.Send === "TRUE")) return;
 
+    let end = parseVNDate(r["End Time"]);
+    if (!end) return;
+
+    // 🔥 FIX QUAN TRỌNG
+    if (end < now) return;
+
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
     let status = (r.Status || "None").trim();
 
-    let end = parseVNDate(r["End Time"]);
     let endStr = formatDate(end);
 
-    // 🔥 FORMAT FINAL
-    msg += `*${title}* | _${endStr}_\n`;
-    msg += `📝 Content: _${content}_\n`;
-    msg += `👾 Status: _${status}_\n`;
+    msg += `*${title} | ${endStr}*\n`;
+    msg += `📝 Content: ${content}\n`;
+    msg += `👾 Status: ${status}\n`;
     msg += `----------------------\n\n`;
   });
 
-  return msg || "Không có công việc nào hôm nay";
+  return msg || "Không có công việc nào còn hiệu lực";
 }
 
 // ===== READ SHEET =====
