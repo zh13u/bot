@@ -23,36 +23,51 @@ async function sendTelegram(chatId, text) {
   });
 }
 
+// ===== FIX DATE PARSE (dd/MM/yyyy HH:mm:ss) =====
+function parseVNDate(dateStr) {
+  if (!dateStr) return new Date();
+
+  const [datePart, timePart] = dateStr.split(" ");
+  const [day, month, year] = datePart.split("/");
+
+  return new Date(`${year}-${month}-${day}T${timePart}`);
+}
+
+// ===== FORMAT DATE HIỂN THỊ =====
+function formatDate(date) {
+  return date.toLocaleString("en-US", {
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 // ===== FORMAT TASK =====
 function formatTasks(rows) {
-  let now = new Date();
-  let todayStr = now.toLocaleDateString("vi-VN");
-
-  let msg = `📅 ${todayStr}\n\n`;
+  let msg = "";
 
   rows.forEach((r) => {
+    // ✅ xử lý checkbox
     if (!(r.Send === true || r.Send === "TRUE")) return;
 
-    let start = new Date(r["Start Time"]);
-    let end = new Date(r["End Time"]);
+    let title = (r.Title || "NONE").toUpperCase().trim();
+    let content = (r.Content || "None").trim();
+    let status = (r.Status || "None").trim();
 
-    let s = start.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    // ✅ FIX DATE
+    let end = parseVNDate(r["End Time"]);
+    let endStr = formatDate(end);
 
-    let e = end.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    msg += `📌 ${r.Title || "None"} | ${s} - ${e}\n`;
-    msg += `📝 ${r.Content || "None"}\n`;
-    msg += `👾 ${r.Status || "None"}\n`;
-    msg += "----------------------\n\n";
+    msg += `📌 ${title} | ${endStr}\n`;
+    msg += `📝 Content: ${content}\n`;
+    msg += `👾 Status: ${status}\n`;
+    msg += `----------------------\n\n`;
   });
 
-  return msg;
+  return msg || "Không có công việc nào hôm nay";
 }
 
 // ===== READ SHEET =====
@@ -72,7 +87,6 @@ async function getTodayTasks() {
 async function handleCommand(text, chatId) {
   const today = new Date().toDateString();
 
-  // reset ngày mới
   if (pausedDate !== today) {
     isPausedToday = false;
   }
@@ -133,7 +147,7 @@ app.post("/", async (req, res) => {
   }
 });
 
-// ===== AUTO SEND (5 PHÚT) =====
+// ===== AUTO SEND =====
 setInterval(async () => {
   const today = new Date().toDateString();
 
