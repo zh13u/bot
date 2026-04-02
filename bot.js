@@ -24,29 +24,29 @@ async function sendTelegram(chatId, text) {
   });
 }
 
-// ===== LẤY GIỜ VN =====
+// ===== TIME VN =====
 function getNowVN() {
   return new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
   );
 }
 
-// ===== PARSE DATE VN =====
+// ===== PARSE DATE =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
 
   const [datePart, timePart] = dateStr.split(" ");
-  if (!datePart || !timePart) return null;
-
   const [day, month, year] = datePart.split("/");
   let [hour, minute, second] = timePart.split(":");
 
-  hour = parseInt(hour);
-  minute = parseInt(minute);
-  second = parseInt(second);
-
-  // tạo date theo VN
-  return new Date(year, month - 1, day, hour, minute, second);
+  return new Date(
+    year,
+    month - 1,
+    day,
+    parseInt(hour),
+    parseInt(minute),
+    parseInt(second)
+  );
 }
 
 // ===== FORMAT DATE =====
@@ -61,9 +61,9 @@ function formatDate(date) {
   });
 }
 
-// ===== FORMAT TASK =====
-function formatTasks(rows) {
-  let now = getNowVN(); // 🔥 dùng giờ VN
+// ===== FORMAT + UPDATE SHEET =====
+async function formatTasks(rows) {
+  let now = getNowVN();
 
   let todayHeader = now.toLocaleDateString("en-US", {
     weekday: "long",
@@ -74,28 +74,62 @@ function formatTasks(rows) {
 
   let msg = `📅 *${todayHeader}*\n\n`;
 
-  rows.forEach((r) => {
-    if (!(r.Send === true || r.Send === "TRUE")) return;
+  let total = 0;
+  let urgent = 0;
+  let normal = 0;
+
+  let body = "";
+
+  for (let r of rows) {
+    if (!(r.Send === true || r.Send === "TRUE")) continue;
 
     let end = parseVNDate(r["End Time"]);
-    if (!end || isNaN(end.getTime())) return;
+    if (!end || isNaN(end)) continue;
 
-    // 🔥 LOGIC CHUẨN: quá hạn thì bỏ
-    if (end.getTime() <= now.getTime()) return;
+    let diff = end.getTime() - now.getTime();
 
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
     let status = (r.Status || "None").trim();
-
     let endStr = formatDate(end);
 
-    msg += `*${title}* | _${endStr}_\n`;
-    msg += `📝 Content: _${content}_\n`;
-    msg += `👾 Status: _${status}_\n`;
-    msg += `----------------------\n\n`;
-  });
+    let state = "";
+    let newStatus = status;
 
-  return msg || "Không có công việc nào còn hiệu lực";
+    total++;
+
+    if (diff <= 0) {
+      state = "❌ *Hết hạn*";
+      newStatus = "Hết hạn";
+    } else if (diff <= 7 * 24 * 60 * 60 * 1000) {
+      state = "🔥 *Sắp hết hạn*";
+      newStatus = "Sắp hết hạn";
+      urgent++;
+    } else {
+      state = "✅ *Còn hạn*";
+      newStatus = "Còn hạn";
+      normal++;
+    }
+
+    // 🔥 UPDATE SHEET nếu khác
+    if (r.Status !== newStatus) {
+      r.Status = newStatus;
+      await r.save();
+    }
+
+    body += `📌 *${title}*\n`;
+    body += `⏰ _${endStr}_\n`;
+    body += `📝 ${content}\n`;
+    body += `👾 ${newStatus}\n`;
+    body += `${state}\n`;
+    body += `━━━━━━━━━━━━━━\n\n`;
+  }
+
+  msg += `📊 *Tổng: ${total}*\n🔥 Sắp hết: ${urgent}\n✅ Còn hạn: ${normal}\n\n`;
+  msg += `━━━━━━━━━━━━━━\n\n`;
+  msg += body;
+
+  return msg || "Không có công việc nào";
 }
 
 // ===== READ SHEET =====
@@ -108,16 +142,14 @@ async function getTodayTasks() {
   const sheet = doc.sheetsByTitle["v2"];
   const rows = await sheet.getRows();
 
-  return formatTasks(rows);
+  return await formatTasks(rows);
 }
 
 // ===== COMMAND =====
 async function handleCommand(text, chatId) {
   const today = getNowVN().toDateString();
 
-  if (pausedDate !== today) {
-    isPausedToday = false;
-  }
+  if (pausedDate !== today) isPausedToday = false;
 
   if (text === "/today") {
     const msg = await getTodayTasks();
@@ -139,19 +171,15 @@ async function handleCommand(text, chatId) {
     return sendTelegram(
       chatId,
 `📌 COMMAND:
-/today - xem công việc
-/end_today - tắt hôm nay
-/restart - bật lại
-/help - trợ giúp`
+/today
+/end_today
+/restart
+/help`
     );
   }
 
   if (text.startsWith("/")) {
-    return sendTelegram(
-      chatId,
-`❌ Sai lệnh!
-👉 Dùng /help để xem danh sách lệnh`
-    );
+    return sendTelegram(chatId, "❌ Sai lệnh!");
   }
 }
 
@@ -174,7 +202,7 @@ app.post("/", async (req, res) => {
   }
 });
 
-// ===== AUTO SEND (10s) =====
+// ===== AUTO SEND =====
 setInterval(async () => {
   const today = getNowVN().toDateString();
 
@@ -186,7 +214,7 @@ setInterval(async () => {
   } catch (e) {
     console.log(e);
   }
-}, 10 * 1000);
+}, 60 * 1000); // 👉 nên để 1 phút
 
 // ===== HEALTH =====
 app.get("/", (req, res) => {
