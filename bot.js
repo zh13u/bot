@@ -24,6 +24,13 @@ async function sendTelegram(chatId, text) {
   });
 }
 
+// ===== LẤY GIỜ VN =====
+function getNowVN() {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
+  );
+}
+
 // ===== PARSE DATE VN =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
@@ -38,6 +45,7 @@ function parseVNDate(dateStr) {
   minute = parseInt(minute);
   second = parseInt(second);
 
+  // tạo date theo VN
   return new Date(year, month - 1, day, hour, minute, second);
 }
 
@@ -53,9 +61,9 @@ function formatDate(date) {
   });
 }
 
-// ===== FORMAT TASK (UPDATED LOGIC) =====
+// ===== FORMAT TASK =====
 function formatTasks(rows) {
-  let now = new Date();
+  let now = getNowVN(); // 🔥 dùng giờ VN
 
   let todayHeader = now.toLocaleDateString("en-US", {
     weekday: "long",
@@ -72,26 +80,22 @@ function formatTasks(rows) {
     let end = parseVNDate(r["End Time"]);
     if (!end || isNaN(end.getTime())) return;
 
+    // 🔥 LOGIC CHUẨN: quá hạn thì bỏ
+    if (end.getTime() <= now.getTime()) return;
+
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
     let status = (r.Status || "None").trim();
 
     let endStr = formatDate(end);
 
-    // 🔥 LOGIC MỚI: KHÔNG ẨN NỮA
-    let timeState =
-      end.getTime() < now.getTime()
-        ? "❌ *Hết hạn*"
-        : "⏳ *Còn hạn*";
-
     msg += `*${title}* | _${endStr}_\n`;
     msg += `📝 Content: _${content}_\n`;
     msg += `👾 Status: _${status}_\n`;
-    msg += `${timeState}\n`;
     msg += `----------------------\n\n`;
   });
 
-  return msg || "Không có công việc nào";
+  return msg || "Không có công việc nào còn hiệu lực";
 }
 
 // ===== READ SHEET =====
@@ -109,7 +113,7 @@ async function getTodayTasks() {
 
 // ===== COMMAND =====
 async function handleCommand(text, chatId) {
-  const today = new Date().toDateString();
+  const today = getNowVN().toDateString();
 
   if (pausedDate !== today) {
     isPausedToday = false;
@@ -172,7 +176,7 @@ app.post("/", async (req, res) => {
 
 // ===== AUTO SEND (10s) =====
 setInterval(async () => {
-  const today = new Date().toDateString();
+  const today = getNowVN().toDateString();
 
   if (isPausedToday && pausedDate === today) return;
 
