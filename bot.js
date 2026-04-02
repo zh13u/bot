@@ -61,7 +61,18 @@ function formatDate(date) {
   });
 }
 
-// ===== FORMAT + UPDATE SHEET =====
+// ===== COUNTDOWN =====
+function getRemainingTime(diff) {
+  if (diff <= 0) return "Đã hết hạn";
+
+  let days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  let hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  let mins = Math.floor((diff / (1000 * 60)) % 60);
+
+  return `${days}d ${hours}h ${mins}m`;
+}
+
+// ===== FORMAT TASK =====
 async function formatTasks(rows) {
   let now = getNowVN();
 
@@ -72,11 +83,7 @@ async function formatTasks(rows) {
     year: "numeric",
   });
 
-  let msg = `📅 *${todayHeader}*\n\n`;
-
-  let total = 0;
-  let urgent = 0;
-  let normal = 0;
+  let total = 0, urgent = 0, normal = 0, expired = 0;
 
   let body = "";
 
@@ -84,48 +91,56 @@ async function formatTasks(rows) {
     if (!(r.Send === true || r.Send === "TRUE")) continue;
 
     let end = parseVNDate(r["End Time"]);
-    if (!end || isNaN(end)) continue;
+    if (!end) continue;
 
-    let diff = end.getTime() - now.getTime();
+    let diff = end - now;
 
-    let title = (r.Title || "NONE").toUpperCase().trim();
-    let content = (r.Content || "None").trim();
-    let status = (r.Status || "None").trim();
+    let title = (r.Title || "NONE").toUpperCase();
+    let content = r.Content || "None";
     let endStr = formatDate(end);
-
-    let state = "";
-    let newStatus = status;
 
     total++;
 
+    let state = "";
+    let statusLine = "Đang thực hiện";
+
     if (diff <= 0) {
       state = "❌ *Hết hạn*";
-      newStatus = "Hết hạn";
+      statusLine = "Hết hạn";
+      expired++;
+
+      // 🔥 CHỈ UPDATE KHI HẾT HẠN
+      if (r.Status !== "Hết hạn") {
+        r.Status = "Hết hạn";
+        await r.save();
+      }
+
     } else if (diff <= 7 * 24 * 60 * 60 * 1000) {
       state = "🔥 *Sắp hết hạn*";
-      newStatus = "Sắp hết hạn";
       urgent++;
+      normal++;
     } else {
       state = "✅ *Còn hạn*";
-      newStatus = "Còn hạn";
       normal++;
-    }
-
-    // 🔥 UPDATE SHEET nếu khác
-    if (r.Status !== newStatus) {
-      r.Status = newStatus;
-      await r.save();
     }
 
     body += `📌 *${title}*\n`;
     body += `⏰ _${endStr}_\n`;
     body += `📝 ${content}\n`;
-    body += `👾 ${newStatus}\n`;
+    body += `👾 ${statusLine}\n`;
+    body += `⏳ ${getRemainingTime(diff)}\n`;
     body += `${state}\n`;
     body += `━━━━━━━━━━━━━━\n\n`;
   }
 
-  msg += `📊 *Tổng: ${total}*\n🔥 Sắp hết: ${urgent}\n✅ Còn hạn: ${normal}\n\n`;
+  let msg = `📅 *${todayHeader}*\n\n`;
+  msg += `📊 *Tổng: ${total}*\n`;
+  msg += `🔥 Sắp hết: ${urgent}\n`;
+  msg += `✅ Còn hạn: ${normal}\n`;
+  msg += `❌ Hết hạn: ${expired}\n\n`;
+
+  msg += `👉 [Mở Google Sheet để tắt task](https://docs.google.com/spreadsheets/d/${SHEET_ID})\n\n`;
+
   msg += `━━━━━━━━━━━━━━\n\n`;
   msg += body;
 
@@ -168,14 +183,12 @@ async function handleCommand(text, chatId) {
   }
 
   if (text === "/help") {
-    return sendTelegram(
-      chatId,
+    return sendTelegram(chatId,
 `📌 COMMAND:
 /today
 /end_today
 /restart
-/help`
-    );
+/help`);
   }
 
   if (text.startsWith("/")) {
@@ -214,7 +227,7 @@ setInterval(async () => {
   } catch (e) {
     console.log(e);
   }
-}, 60 * 1000); // 👉 nên để 1 phút
+}, 10 * 1000);
 
 // ===== HEALTH =====
 app.get("/", (req, res) => {
