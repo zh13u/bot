@@ -24,7 +24,7 @@ async function sendTelegram(chatId, text) {
   });
 }
 
-// ===== FIX DATE PARSE (dd/MM/yyyy HH:mm:ss) =====
+// ===== PARSE DATE VN (FIX TIMEZONE +07) =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
 
@@ -32,18 +32,17 @@ function parseVNDate(dateStr) {
   if (!datePart || !timePart) return null;
 
   const [day, month, year] = datePart.split("/");
-
   let [hour, minute, second] = timePart.split(":");
 
-  // ✅ FIX: thêm số 0 nếu thiếu
   hour = hour.padStart(2, "0");
   minute = minute.padStart(2, "0");
   second = second.padStart(2, "0");
 
-  return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+  // 🔥 FIX TIMEZONE VN
+  return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}+07:00`);
 }
 
-// ===== FORMAT DATE HIỂN THỊ =====
+// ===== FORMAT DATE =====
 function formatDate(date) {
   return date.toLocaleString("en-US", {
     weekday: "long",
@@ -69,13 +68,16 @@ function formatTasks(rows) {
   let msg = `📅 *${todayHeader}*\n\n`;
 
   rows.forEach((r) => {
+    // chỉ lấy task được tick
     if (!(r.Send === true || r.Send === "TRUE")) return;
 
     let end = parseVNDate(r["End Time"]);
-    if (!end) return;
 
-    // 🔥 FIX QUAN TRỌNG
-    if (end < now) return;
+    // bỏ nếu lỗi date
+    if (!end || isNaN(end.getTime())) return;
+
+    // 🔥 bỏ task đã hết hạn
+    if (end.getTime() < now.getTime()) return;
 
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
@@ -109,6 +111,7 @@ async function getTodayTasks() {
 async function handleCommand(text, chatId) {
   const today = new Date().toDateString();
 
+  // reset mỗi ngày
   if (pausedDate !== today) {
     isPausedToday = false;
   }
@@ -140,7 +143,7 @@ async function handleCommand(text, chatId) {
     );
   }
 
-  // ❌ sai command
+  // sai command
   if (text.startsWith("/")) {
     return sendTelegram(
       chatId,
@@ -169,7 +172,7 @@ app.post("/", async (req, res) => {
   }
 });
 
-// ===== AUTO SEND =====
+// ===== AUTO SEND (10s) =====
 setInterval(async () => {
   const today = new Date().toDateString();
 
