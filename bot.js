@@ -34,12 +34,11 @@ function parseVNDate(dateStr) {
   const [day, month, year] = datePart.split("/");
   let [hour, minute, second] = timePart.split(":");
 
-  hour = hour.padStart(2, "0");
-  minute = minute.padStart(2, "0");
-  second = second.padStart(2, "0");
+  hour = parseInt(hour);
+  minute = parseInt(minute);
+  second = parseInt(second);
 
-  // 🔥 FIX TIMEZONE VN
-  return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}+07:00`);
+  return new Date(year, month - 1, day, hour, minute, second);
 }
 
 // ===== FORMAT DATE =====
@@ -85,9 +84,9 @@ function formatTasks(rows) {
 
     let endStr = formatDate(end);
 
-    msg += `*${title} | ${endStr}*\n`;
-    msg += `📝 Content: ${content}\n`;
-    msg += `👾 Status: ${status}\n`;
+    msg += `*${title}* | _${endStr}_\n`;
+    msg += `📝 Content: _${content}_\n`;
+    msg += `👾 Status: _${status}_\n`;
     msg += `----------------------\n\n`;
   });
 
