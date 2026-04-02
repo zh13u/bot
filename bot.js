@@ -24,7 +24,7 @@ async function sendTelegram(chatId, text) {
   });
 }
 
-// ===== PARSE DATE VN (FIX TIMEZONE +07) =====
+// ===== PARSE DATE VN =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
 
@@ -53,7 +53,7 @@ function formatDate(date) {
   });
 }
 
-// ===== FORMAT TASK =====
+// ===== FORMAT TASK (UPDATED LOGIC) =====
 function formatTasks(rows) {
   let now = new Date();
 
@@ -67,16 +67,10 @@ function formatTasks(rows) {
   let msg = `📅 *${todayHeader}*\n\n`;
 
   rows.forEach((r) => {
-    // chỉ lấy task được tick
     if (!(r.Send === true || r.Send === "TRUE")) return;
 
     let end = parseVNDate(r["End Time"]);
-
-    // bỏ nếu lỗi date
     if (!end || isNaN(end.getTime())) return;
-
-    // 🔥 bỏ task đã hết hạn
-    if (end.getTime() < now.getTime()) return;
 
     let title = (r.Title || "NONE").toUpperCase().trim();
     let content = (r.Content || "None").trim();
@@ -84,13 +78,20 @@ function formatTasks(rows) {
 
     let endStr = formatDate(end);
 
+    // 🔥 LOGIC MỚI: KHÔNG ẨN NỮA
+    let timeState =
+      end.getTime() < now.getTime()
+        ? "❌ *Hết hạn*"
+        : "⏳ *Còn hạn*";
+
     msg += `*${title}* | _${endStr}_\n`;
     msg += `📝 Content: _${content}_\n`;
     msg += `👾 Status: _${status}_\n`;
+    msg += `${timeState}\n`;
     msg += `----------------------\n\n`;
   });
 
-  return msg || "Không có công việc nào còn hiệu lực";
+  return msg || "Không có công việc nào";
 }
 
 // ===== READ SHEET =====
@@ -110,7 +111,6 @@ async function getTodayTasks() {
 async function handleCommand(text, chatId) {
   const today = new Date().toDateString();
 
-  // reset mỗi ngày
   if (pausedDate !== today) {
     isPausedToday = false;
   }
@@ -142,7 +142,6 @@ async function handleCommand(text, chatId) {
     );
   }
 
-  // sai command
   if (text.startsWith("/")) {
     return sendTelegram(
       chatId,
