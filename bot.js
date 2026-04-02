@@ -168,7 +168,7 @@ setInterval(async () => {
   } catch (e) {
     console.log(e);
   }
-}, 5 * 60 * 1000);
+}, 10 * 1000);
 
 // ===== HEALTH =====
 app.get("/", (req, res) => {
