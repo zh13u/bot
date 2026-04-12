@@ -308,23 +308,6 @@ async function getTodayTasks() {
     return diffA - diffB;
   });
 
-  // ===== 🔥 UPDATE LẠI SHEET =====
-  for (let i = 0; i < rows.length; i++) {
-    if (rows[i]._rowNumber !== i + 2) {
-      await sheet.deleteRow(rows[i]._rowNumber - 1);
-    }
-  }
-
-  // add lại theo thứ tự mới
-  for (let r of rows) {
-    await sheet.addRow({
-      Title: r.Title,
-      Content: r.Content,
-      "End Time": r["End Time"],
-      Send: r.Send,
-      Status: r.Status,
-    });
-  }
 
   return await formatTasks(rows);
 }
