@@ -11,7 +11,7 @@ const CHAT_ID = process.env.CHAT_ID;
 const SHEET_ID = process.env.SHEET_ID;
 const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
-// 👉 THÊM WEATHER
+// WEATHERAPI
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
 const CITY = "Ho Chi Minh";
 
@@ -19,7 +19,7 @@ const CITY = "Ho Chi Minh";
 let isPausedToday = false;
 let pausedDate = "";
 
-// ===== SEND TELEGRAM =====
+// ===== TELEGRAM =====
 async function sendTelegram(chatId, text) {
   await axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
     chat_id: chatId,
@@ -28,136 +28,101 @@ async function sendTelegram(chatId, text) {
   });
 }
 
-// ===== TIME VN =====
+// ===== TIME =====
 function getNowVN() {
   return new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" })
   );
 }
 
-// ===== WEATHER =====
+// ===== WEATHER BASIC =====
 async function getWeather() {
   try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
+    const url = `http://api.weatherapi.com/v1/current.json?key=${WEATHER_API_KEY}&q=${CITY}&lang=vi`;
     const res = await axios.get(url);
 
     const d = res.data;
 
     return {
-      temp: d.main.temp,
-      feels: d.main.feels_like,
-      humidity: d.main.humidity,
-      temp_min: d.main.temp_min,
-      temp_max: d.main.temp_max,
-      pressure: d.main.pressure,
-
-      weather: d.weather[0].description,
-
-      wind: d.wind.speed,
-      clouds: d.clouds.all,
-      visibility: d.visibility,
-
-      sunrise: d.sys.sunrise,
-      sunset: d.sys.sunset,
-
-      city: d.name,
+      temp: d.current.temp_c,
+      feels: d.current.feelslike_c,
+      humidity: d.current.humidity,
+      wind: d.current.wind_kph,
+      condition: d.current.condition.text,
+      city: d.location.name,
+      time: d.location.localtime,
     };
   } catch (err) {
-    console.log("❌ WEATHER ERROR:", err.response?.data || err.message);
+    console.log("WEATHER ERROR:", err.message);
     return null;
   }
 }
 
-// ===== FORMAT WEATHER BASIC =====
 async function formatWeatherBasic() {
   const w = await getWeather();
   if (!w) return "";
 
-  const sunrise = new Date(w.sunrise * 1000).toLocaleTimeString("vi-VN");
-  const sunset = new Date(w.sunset * 1000).toLocaleTimeString("vi-VN");
-
   return `
-${getWeatherEmoji(w.weather)} *Thời tiết ${w.city}*
-_${w.weather}_
+🌤 *${w.city}*
+_${w.condition}_
 
 🌡 *${w.temp}°C* (cảm giác ${w.feels}°C)
-🔻 ${w.temp_min}°C • 🔺 ${w.temp_max}°C
-💧 ${w.humidity}% • 🌥 ${w.clouds}%
+💧 ${w.humidity}% • 🌬 ${w.wind} km/h
 
-🌬 ${w.wind} m/s • 👁 ${(w.visibility / 1000).toFixed(1)} km
-📈 ${w.pressure} hPa
-
-🌅 ${sunrise} • 🌇 ${sunset}
 ━━━━━━━━━━━━━━
-
 `;
-}
-
-async function getForecast() {
-  try {
-    const url = `https://api.openweathermap.org/data/2.5/forecast?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
-    const res = await axios.get(url);
-    return res.data.list.slice(0, 3);
-  } catch (err) {
-    console.log("Forecast error:", err.message);
-    return [];
-  }
 }
 
 // ===== WEATHER DETAIL =====
 async function formatWeatherDetail() {
-  const w = await getWeather();
-  const forecast = await getForecast();
+  try {
+    const url = `http://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${CITY}&days=1&aqi=yes&lang=vi`;
+    const res = await axios.get(url);
 
-  if (!w) return "❌ Không lấy được dữ liệu thời tiết";
+    const d = res.data;
+    const current = d.current;
+    const forecast = d.forecast.forecastday[0].hour.slice(0, 5);
 
-  let msg = `
+    let msg = `
 🌍 *THỜI TIẾT CHI TIẾT*
 
-📍 *${w.city}*
+📍 *${d.location.name}, ${d.location.country}*
+🕒 ${d.location.localtime}
 
-${getWeatherEmoji(w.weather)} ${w.weather}
+${current.condition.text}
 
-🌡 ${w.temp}°C (cảm giác ${w.feels}°C)
-🔻 ${w.temp_min}°C • 🔺 ${w.temp_max}°C
-💧 ${w.humidity}% • 🌥 ${w.clouds}%
-🌬 ${w.wind} m/s
-📈 ${w.pressure} hPa
+🌡 ${current.temp_c}°C (cảm giác ${current.feelslike_c}°C)
+💧 ${current.humidity}%
+🌬 ${current.wind_kph} km/h
+👁 ${current.vis_km} km
+📊 AQI: ${current.air_quality?.pm2_5?.toFixed(1) || "N/A"}
 
 ━━━━━━━━━━━━━━
-📊 *Dự báo sắp tới*
+📊 *Dự báo theo giờ*
 `;
 
-  forecast.forEach(f => {
-    const time = new Date(f.dt * 1000).toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
+    forecast.forEach(f => {
+      const time = f.time.split(" ")[1];
+
+      msg += `
+🕒 ${time}
+🌡 ${f.temp_c}°C
+💧 ${f.humidity}%
+_${f.condition.text}_
+`;
     });
 
-    msg += `
-🕒 ${time}
-🌡 ${f.main.temp}°C
-💧 ${f.main.humidity}%
-_${f.weather[0].description}_
-`;
-  });
+    msg += `\n━━━━━━━━━━━━━━\n⏰ _Realtime_`;
 
-  msg += `\n━━━━━━━━━━━━━━\n⏰ _Realtime_`;
+    return msg;
 
-  return msg;
+  } catch (err) {
+    console.log(err);
+    return "❌ Lỗi lấy weather detail";
+  }
 }
 
-function getWeatherEmoji(desc) {
-  desc = desc.toLowerCase();
-  if (desc.includes("mưa")) return "🌧";
-  if (desc.includes("nắng") || desc.includes("clear")) return "☀️";
-  if (desc.includes("mây")) return "☁️";
-  if (desc.includes("giông")) return "⛈";
-  if (desc.includes("sương")) return "🌫";
-  return "🌤";
-}
-
-// ===== PARSE DATE =====
+// ===== DATE =====
 function parseVNDate(dateStr) {
   if (!dateStr) return null;
 
@@ -168,7 +133,6 @@ function parseVNDate(dateStr) {
   return new Date(year, month - 1, day, hour, minute, second);
 }
 
-// ===== FORMAT DATE =====
 function formatDate(date) {
   return date.toLocaleString("en-US", {
     weekday: "long",
@@ -180,7 +144,6 @@ function formatDate(date) {
   });
 }
 
-// ===== COUNTDOWN =====
 function getRemainingTime(diff) {
   if (diff <= 0) return "Đã hết hạn";
 
@@ -191,11 +154,11 @@ function getRemainingTime(diff) {
   return `${days}d ${hours}h ${mins}m`;
 }
 
-// ===== FORMAT TASK =====
+// ===== TASK =====
 async function formatTasks(rows) {
   let now = getNowVN();
 
-  // ===== 🔥 SORT TASK =====
+  // SORT
   rows.sort((a, b) => {
     const dateA = parseVNDate(a["End Time"]);
     const dateB = parseVNDate(b["End Time"]);
@@ -269,7 +232,7 @@ async function formatTasks(rows) {
 
   const weather = await formatWeatherBasic();
 
-  let msg = `📅 *${todayHeader}*\n\n`;
+  let msg = `📅 *${todayHeader}*\n━━━━━━━━━━━━━━\n\n`;
   msg += weather;
 
   msg += `📊 *Tổng: ${total}*\n`;
@@ -277,7 +240,7 @@ async function formatTasks(rows) {
   msg += `✅ Còn hạn: ${normal}\n`;
   msg += `❌ Hết hạn: ${expired}\n\n`;
 
-  msg += `👉 [Mở Google Sheet để tắt task đã hết hạn](https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=710842622#gid=710842622)\n\n`;
+  msg += `👉 [Mở Sheet](https://docs.google.com/spreadsheets/d/${SHEET_ID})\n\n`;
 
   msg += `━━━━━━━━━━━━━━\n\n`;
   msg += body;
@@ -285,10 +248,9 @@ async function formatTasks(rows) {
   return msg || "Không có công việc nào";
 }
 
-// ===== READ SHEET =====
+// ===== SHEET =====
 async function getTodayTasks() {
   const doc = new GoogleSpreadsheet(SHEET_ID);
-
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
 
@@ -312,12 +274,12 @@ async function handleCommand(text, chatId) {
   if (text === "/end_today") {
     isPausedToday = true;
     pausedDate = today;
-    return sendTelegram(chatId, "⛔ Đã tắt thông báo hôm nay");
+    return sendTelegram(chatId, "⛔ Đã tắt hôm nay");
   }
 
   if (text === "/restart") {
     isPausedToday = false;
-    return sendTelegram(chatId, "▶️ Đã bật lại thông báo");
+    return sendTelegram(chatId, "▶️ Đã bật lại");
   }
 
   if (text === "/weather_detail") {
@@ -359,7 +321,7 @@ app.post("/", async (req, res) => {
   }
 });
 
-// ===== AUTO SEND =====
+// ===== AUTO =====
 setInterval(async () => {
   const today = getNowVN().toDateString();
 
