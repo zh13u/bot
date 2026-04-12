@@ -281,11 +281,50 @@ async function formatTasks(rows) {
 // ===== SHEET =====
 async function getTodayTasks() {
   const doc = new GoogleSpreadsheet(SHEET_ID);
+
   await doc.useServiceAccountAuth(creds);
   await doc.loadInfo();
 
   const sheet = doc.sheetsByTitle["v2"];
   const rows = await sheet.getRows();
+
+  const now = getNowVN();
+
+  // ===== SORT =====
+  rows.sort((a, b) => {
+    const dateA = parseVNDate(a["End Time"]);
+    const dateB = parseVNDate(b["End Time"]);
+
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+
+    const diffA = dateA - now;
+    const diffB = dateB - now;
+
+    // hết hạn xuống cuối
+    if (diffA <= 0 && diffB > 0) return 1;
+    if (diffB <= 0 && diffA > 0) return -1;
+
+    return diffA - diffB;
+  });
+
+  // ===== 🔥 UPDATE LẠI SHEET =====
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i]._rowNumber !== i + 2) {
+      await sheet.deleteRow(rows[i]._rowNumber - 1);
+    }
+  }
+
+  // add lại theo thứ tự mới
+  for (let r of rows) {
+    await sheet.addRow({
+      Title: r.Title,
+      Content: r.Content,
+      "End Time": r["End Time"],
+      Send: r.Send,
+      Status: r.Status,
+    });
+  }
 
   return await formatTasks(rows);
 }
