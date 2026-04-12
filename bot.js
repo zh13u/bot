@@ -97,8 +97,6 @@ async function getForecast() {
   try {
     const url = `https://api.openweathermap.org/data/2.5/forecast?q=${CITY}&appid=${WEATHER_API_KEY}&units=metric&lang=vi`;
     const res = await axios.get(url);
-
-    // lấy 3 mốc gần nhất (đỡ spam)
     return res.data.list.slice(0, 3);
   } catch (err) {
     console.log("Forecast error:", err.message);
@@ -151,13 +149,11 @@ _${f.weather[0].description}_
 
 function getWeatherEmoji(desc) {
   desc = desc.toLowerCase();
-
   if (desc.includes("mưa")) return "🌧";
   if (desc.includes("nắng") || desc.includes("clear")) return "☀️";
   if (desc.includes("mây")) return "☁️";
   if (desc.includes("giông")) return "⛈";
   if (desc.includes("sương")) return "🌫";
-
   return "🌤";
 }
 
@@ -199,6 +195,23 @@ function getRemainingTime(diff) {
 async function formatTasks(rows) {
   let now = getNowVN();
 
+  // ===== 🔥 SORT TASK =====
+  rows.sort((a, b) => {
+    const dateA = parseVNDate(a["End Time"]);
+    const dateB = parseVNDate(b["End Time"]);
+
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+
+    const diffA = dateA - now;
+    const diffB = dateB - now;
+
+    if (diffA <= 0 && diffB > 0) return 1;
+    if (diffB <= 0 && diffA > 0) return -1;
+
+    return diffA - diffB;
+  });
+
   let todayHeader = now.toLocaleDateString("en-US", {
     weekday: "long",
     day: "2-digit",
@@ -207,7 +220,6 @@ async function formatTasks(rows) {
   });
 
   let total = 0, urgent = 0, normal = 0, expired = 0;
-
   let body = "";
 
   for (let r of rows) {
@@ -255,12 +267,10 @@ async function formatTasks(rows) {
     body += `━━━━━━━━━━━━━━\n\n`;
   }
 
-  // 👉 THÊM WEATHER VÀO HEADER
   const weather = await formatWeatherBasic();
 
   let msg = `📅 *${todayHeader}*\n\n`;
-
-  msg += weather; // 🔥 CHÈN WEATHER Ở ĐÂY
+  msg += weather;
 
   msg += `📊 *Tổng: ${total}*\n`;
   msg += `🔥 Sắp hết: ${urgent}\n`;
@@ -310,7 +320,6 @@ async function handleCommand(text, chatId) {
     return sendTelegram(chatId, "▶️ Đã bật lại thông báo");
   }
 
-  // 👉 THÊM COMMAND MỚI
   if (text === "/weather_detail") {
     const msg = await formatWeatherDetail();
     return sendTelegram(chatId, msg);
@@ -363,31 +372,6 @@ setInterval(async () => {
     console.log(e);
   }
 }, 15 * 60 * 1000);
-
-// 🔥 SORT TASK: hết hạn -> sắp hết -> còn hạn
-rows.sort((a, b) => {
-  let endA = parseVNDate(a["End Time"]);
-  let endB = parseVNDate(b["End Time"]);
-
-  if (!endA) return 1;
-  if (!endB) return -1;
-
-  let diffA = endA - now;
-  let diffB = endB - now;
-
-  const priority = (diff) => {
-    if (diff <= 0) return 0; // hết hạn
-    if (diff <= 7 * 24 * 60 * 60 * 1000) return 1; // sắp hết
-    return 2; // còn hạn
-  };
-
-  let pA = priority(diffA);
-  let pB = priority(diffB);
-
-  if (pA !== pB) return pA - pB;
-
-  return diffA - diffB;
-});
 
 // ===== HEALTH =====
 app.get("/", (req, res) => {
