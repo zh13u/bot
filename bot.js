@@ -76,43 +76,73 @@ _${w.condition}_
 // ===== WEATHER DETAIL =====
 async function formatWeatherDetail() {
   try {
-    const url = `http://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${CITY}&days=1&aqi=yes&lang=vi`;
+    const url = `http://api.weatherapi.com/v1/forecast.json?key=${WEATHER_API_KEY}&q=${CITY}&days=3&aqi=yes&alerts=yes&lang=vi`;
     const res = await axios.get(url);
 
     const d = res.data;
     const current = d.current;
-    const forecast = d.forecast.forecastday[0].hour.slice(0, 5);
 
     let msg = `
-🌍 *THỜI TIẾT CHI TIẾT*
+🌍 *THỜI TIẾT FULL DETAIL*
 
 📍 *${d.location.name}, ${d.location.country}*
 🕒 ${d.location.localtime}
 
-${current.condition.text}
+━━━━━━━━━━━━━━
+🌤 *HIỆN TẠI*
+_${current.condition.text}_
 
-🌡 ${current.temp_c}°C (cảm giác ${current.feelslike_c}°C)
+🌡 ${current.temp_c}°C (feels ${current.feelslike_c}°C)
 💧 ${current.humidity}%
-🌬 ${current.wind_kph} km/h
+🌬 ${current.wind_kph} km/h (${current.wind_dir})
+💨 Gust: ${current.gust_kph} km/h
 👁 ${current.vis_km} km
-📊 AQI: ${current.air_quality?.pm2_5?.toFixed(1) || "N/A"}
+📊 Pressure: ${current.pressure_mb} mb
+☀️ UV: ${current.uv}
+
+🌧 Rain: ${current.precip_mm} mm
+☁️ Cloud: ${current.cloud}%
+
+📊 AQI (PM2.5): ${current.air_quality?.pm2_5?.toFixed(1) || "N/A"}
 
 ━━━━━━━━━━━━━━
-📊 *Dự báo theo giờ*
+📅 *DỰ BÁO 3 NGÀY*
 `;
 
-    forecast.forEach(f => {
-      const time = f.time.split(" ")[1];
-
+    d.forecast.forecastday.forEach(day => {
       msg += `
-🕒 ${time}
-🌡 ${f.temp_c}°C
-💧 ${f.humidity}%
-_${f.condition.text}_
+📆 ${day.date}
+
+🌡 ${day.day.mintemp_c}°C - ${day.day.maxtemp_c}°C
+_${day.day.condition.text}_
+
+💧 ${day.day.avghumidity}%
+🌧 ${day.day.daily_chance_of_rain}%
+☀️ UV: ${day.day.uv}
+
+🌅 ${day.astro.sunrise} | 🌇 ${day.astro.sunset}
+🌙 ${day.astro.moon_phase}
 `;
     });
 
-    msg += `\n━━━━━━━━━━━━━━\n⏰ _Realtime_`;
+    msg += `\n━━━━━━━━━━━━━━\n🕒 *DỰ BÁO THEO GIỜ (12h tới)*`;
+
+    const hours = d.forecast.forecastday[0].hour.slice(0, 12);
+
+    hours.forEach(h => {
+      const time = h.time.split(" ")[1];
+
+      msg += `
+🕒 ${time}
+🌡 ${h.temp_c}°C (feels ${h.feelslike_c})
+💧 ${h.humidity}%
+🌧 ${h.chance_of_rain}%
+🌬 ${h.wind_kph} km/h
+_${h.condition.text}_
+`;
+    });
+
+    msg += `\n━━━━━━━━━━━━━━\n⏰ _Realtime update_`;
 
     return msg;
 
